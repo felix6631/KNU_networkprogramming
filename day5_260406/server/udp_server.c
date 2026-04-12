@@ -34,8 +34,14 @@ int main(int argc, char *argv[]) {
   char board_round[BOARD_SIZE][BOARD_SIZE] = {0,};
   REQ_PACKET req;
   RES_PACKET res;
+  int cnt = 0;
   memset(&req, 0, sizeof(req));
   memset(&res, 0, sizeof(res));
+
+  if(argc != 2) {
+    fprintf(stderr,"Usage: %s <port>\n",argv[0]);
+    exit(1);
+  }
 
   // board init
   printf("----------------------------------\n");
@@ -81,18 +87,25 @@ int main(int argc, char *argv[]) {
     clnt_adr_sz = sizeof(clnt_adr);
     recvfrom(serv_sock, &req, sizeof(req), 0, (struct sockaddr*)&clnt_adr, &clnt_adr_sz);
     printf("[Server] Rx cmd = %d, ch = %c\n",req.cmd,req.ch);
-    
+
+    res.result = 0;
     // compare
     for(int i=0;i<BOARD_SIZE;i++) {
       for(int j=0;j<BOARD_SIZE;j++) {
-        if(board_round[i][j] == req.ch) {
+        if(res.board[i][j] == ' ' && board_round[i][j] == req.ch) {
+          cnt += 1;
           res.board[i][j] = board_round[i][j];
-          res.result += 1;
+          
         }
       }
     }
-     
-    if(res.result == 25) {
+    for(int i=0;i<BOARD_SIZE;i++) {
+      for(int j=0;j<BOARD_SIZE;j++) {
+        if(board_round[i][j] == req.ch)
+          res.result += 1;
+      }
+    }
+    if(cnt == 25) {
       res.result = 0;
       res.cmd = GAME_END;
     }
@@ -103,13 +116,17 @@ int main(int argc, char *argv[]) {
     sendto(serv_sock, &res, sizeof(res), 0, (struct sockaddr*)&clnt_adr,clnt_adr_sz);
     printf("[Server] Tx cmd = %d, result = %d\n",res.cmd,res.result);
 
+    // print
+    printboard(board_round, res.board);
+
     if(res.cmd == GAME_END) {
       printf("No empty space. Exit this program.\n");
       break;
     }
     
-    // print
-    printboard(board_round, res.board);
+    
+
+    sleep(1);
   }
 
   close(serv_sock);
@@ -126,10 +143,11 @@ void printboard(char board1[][BOARD_SIZE], char board2[][BOARD_SIZE]) {
     for(int j=0;j<5;j++) {
       printf("| %c ",board1[i][j]);
     }
-    printf("\t");
+    printf("|\t");
     for(int j=0;j<5;j++) {
       printf("| %c ",board2[i][j]);
     }
+    printf("|\n");
     printf("|   |   |   |   |   |\t");    printf("|   |   |   |   |   |\n");
   }
     printf("+-------------------+\t");    printf("+-------------------+\n");

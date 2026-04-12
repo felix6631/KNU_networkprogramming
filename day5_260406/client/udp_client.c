@@ -36,8 +36,7 @@ int main(int argc, char* argv[]) {
   RES_PACKET res;
   memset(&req, 0, sizeof(req));
   memset(&res, 0, sizeof(res));
-  socklen_t adr_sz;
-  struct sockaddr_in serv_adr, from_adr;
+  struct sockaddr_in serv_adr;
 
   if (argc!=3) {
     fprintf(stderr,"Usage : %s <IP> <port>\n",argv[0]);
@@ -60,6 +59,36 @@ int main(int argc, char* argv[]) {
   serv_adr.sin_port = htons(atoi(argv[2]));
 
   while(1) {
+    char try = rand()%26+'A';
+    req.cmd = GAME_REQ;
+    req.ch = try;
+    sendto(sock,&req,(sizeof(req)), 0, (struct sockaddr*)&serv_adr, sizeof(serv_adr));
+    printf("[Client] Tx cmd = %d, ch = %c\n",req.cmd,req.ch);
+
+    recvfrom(sock, &res, sizeof(res), 0, (struct sockaddr*)&serv_adr, (socklen_t*)sizeof(serv_adr));
+    printf("[Client] Rx cmd = %d, result = %d\n",res.cmd,res.result);
+    printboard(res.board);
+
+    if(res.cmd == GAME_END && res.result == 0) {
+      printf("No empty space. Exit this program.\n");
+      break;
+    }
+  }
+
+  close(sock);
+  printf("Exit Client Program\n");
+  return 0;
+}
+
+void printboard(char board[][BOARD_SIZE]) {
+  for(int i=0;i<5;i++) {
+    printf("+-------------------+\n");
+    printf("|   |   |   |   |   |\n");
+    for(int j=0;j<5;j++)
+      printf("| %c ",board[i][j]);
+    printf("|\n");
+    printf("|   |   |   |   |   |\n");
     
-  }  
+  }
+    printf("+-------------------+\n");
 }
