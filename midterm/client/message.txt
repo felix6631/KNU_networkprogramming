@@ -1,0 +1,10 @@
+First, Hello, this is a test message from the client.
+Second, the system status is currently normal.
+Third, requesting the latest update from the server.
+Fourth, data transmission has started successfully.
+Fifth, please acknowledge receipt of this packet.
+Sixth, the connection will be closed in five seconds.
+Seventh, sending the collected sensor data now.
+Eighth, error detected during the previous transfer.
+Ninth, ping request sent to verify connectivity.
+Tenth, Bye!
