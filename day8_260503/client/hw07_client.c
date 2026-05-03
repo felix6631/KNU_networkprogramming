@@ -1,4 +1,4 @@
-// 학번: 000000000 / 이름: Felix
+//2023011844 Kim HyeonJin 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
