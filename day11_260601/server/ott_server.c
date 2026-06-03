@@ -1,4 +1,5 @@
-// 2023011844 Kim Hyeon Jin
+// 2023011844 Felix Brown
+// ott_server.c 2026/06/02 ~ 2026/06/03
 // Include
 
 #include <netinet/in.h>
@@ -43,6 +44,7 @@ typedef struct {
     int block_index;
     int socket;
     int bufsz;
+    int user_type;
 } STREAM;
 #define MAX_THREAD 256
 
@@ -55,9 +57,6 @@ int clnt_cnt;
 int clnt_socks[MAX_CLNT];
 
 pthread_mutex_t mutex;
-pthread_mutex_t mutex_sum;
-
-int send_bytes;
 
 int main(int argc, char* argv[]) {
     int serv_sock, clnt_sock, clnt_adr_sz=0;
@@ -75,8 +74,7 @@ int main(int argc, char* argv[]) {
     
     // thread setting
     pthread_mutex_init(&mutex,NULL);
-    pthread_mutex_init(&mutex_sum,NULL);
-
+    
     //socket setting
     serv_sock = socket(PF_INET,SOCK_STREAM,0);
 
@@ -87,7 +85,7 @@ int main(int argc, char* argv[]) {
     serv_adr.sin_port = htons(atoi(argv[1]));
 
     //bind and listen
-    if(bind(serv_sock, (struct sockaddr*)&serv_adr, sizeof(serv_adr) == -1)) {
+    if(bind(serv_sock, (struct sockaddr*)&serv_adr, sizeof(serv_adr)) == -1) {
         err_handling("bind err");
     }
     if(listen(serv_sock, 5) == -1) {
@@ -122,27 +120,35 @@ void err_handling(const char* msg) {
 }
 
 void* streaming(void* a) {
-    PACKET p;
     int status = 0;
     STREAM* arg = (STREAM*)a;
+    PACKET p = {
+        .command = FILE_SENDING,
+        .type = arg->user_type,
+        .len = arg->bufsz
+    };
     status = fseek(arg->fp,arg->block_index*arg->bufsz,SEEK_SET);
     if (status != 0)
         return NULL;
-    status = fread(p.buf,sizeof(char),p.len,arg->fp);
-    pthread_mutex_lock(&mutex_sum);
-    send_bytes += status;
-    pthread_mutex_unlock(&mutex_sum);
-    return NULL;
+    int* bytes_sent = (int*)malloc(sizeof(int));
+    
+    *bytes_sent = fread(p.buf,sizeof(char),p.len,arg->fp);
+    write(arg->socket,&p,sizeof(p));
+    free(a);
+    return (void*)bytes_sent;
 }
 
 void* clnt_handling(void* arg) {
     int clnt_sock = *(int*)arg;
     int packet_len = sizeof(PACKET);
     PACKET packet;
-    pthread_t stream_thread[256];
+    pthread_t* stream_thread = NULL;
     FILE* fp = fopen("hw09.mp4","r");
     int status = 0;
     int bufsz = 0, user_type = 0;
+    int total_sent = 0;
+    
+
     // read initial request
     status = read(clnt_sock,&packet,packet_len);
     if (packet.command != FILE_REQ) {
@@ -178,21 +184,49 @@ void* clnt_handling(void* arg) {
     packet.command = FILE_SENDING;
     packet.type = user_type;
     
+    // file info
+    fseek(fp, 0, SEEK_END);
+    long file_size = ftell(fp);
+    rewind(fp);
+    //ceiling division
+    int num_blocks = (file_size + bufsz - 1) / bufsz;
+    stream_thread = (pthread_t*)malloc(sizeof(pthread_t) * num_blocks);
+    
+
     
     // Each block can be send individually; No need to stream video for single thread.
     // Which means, below code runs 'threads of a thread'
-    for(int i=0;i<MAX_THREAD;i++) {
-        STREAM s = {.fp = fp, .socket = clnt_sock, .block_index = i, .bufsz = packet.len};
-        pthread_create(&stream_thread[i],NULL,streaming,(void*)&s);
-        pthread_detach(stream_thread[i]);
+    for(int i=0;i<num_blocks;i++) {
+        // allocate in heap 
+        // since each iteration will erase 
+        // stream variable of former iteration.
+        // free() call in streaming() REQUIRED.
+        STREAM* s = malloc(sizeof(STREAM));
+        s->fp = fp;
+        s->socket = clnt_sock;
+        s->block_index = i;
+        s->bufsz = packet.len;
+        s->user_type = packet.type;
+
+        pthread_create(&stream_thread[i],NULL,streaming,(void*)s);
     }
+
+
+    for(int i=0;i<num_blocks;i++) {
+        void* retval;
+        pthread_join(stream_thread[i], &retval);
+        total_sent += *(int*)retval;
+        free(retval);
+    }
+    free(stream_thread);
+
 
     packet.command = FILE_END;
     write(clnt_sock,&packet,packet_len);
 
     printf(
         "Total Tx bytes: %d to Client %d (%s))\n",
-        send_bytes,clnt_sock,
+        total_sent,clnt_sock,
         user_type == USER_BASIC ? "Basic" : user_type == USER_STANDARD ? "Standard" : "Premium"
     );
 
@@ -213,7 +247,7 @@ disconnect_socket:
     pthread_mutex_lock(&mutex);
     for(int i=0;i<clnt_cnt;i++) {
         if(clnt_sock == clnt_socks[i]) {
-            while(i < clnt_cnt) {
+            while(i < clnt_cnt-1) {
                 clnt_socks[i] = clnt_socks[i+1];
                 i++;
             }
