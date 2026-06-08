@@ -1,5 +1,5 @@
-// 2023011844 Felix Brown
-// ott_client.c 2026/06/02 ~ 2026/06/--
+// 2023011844 Kim Hyeon Jin
+// ott_client.c 2026/06/02 ~ 2026/06/03
 // Include 
 #include <stdio.h>
 #include <string.h>
